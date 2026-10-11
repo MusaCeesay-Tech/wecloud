@@ -1,0 +1,31 @@
+# Build artifacts
+*.exe
+coordinator/wecloud-coordinator
+proxy/wecloud-proxy
+
+# SQLite database (runtime state)
+*.db
+*.db-shm
+*.db-wal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+
+# Local sessions & secrets
+.wecloud/
+.env
+.env.*
+!.env.example
+
+# Logs & OS cruft
+*.log
+Thumbs.db
+Desktop.ini
