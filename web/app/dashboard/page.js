@@ -197,6 +197,7 @@ export default function Dashboard() {
                   <th>Image</th>
                   <th>Worker</th>
                   <th>Port</th>
+                  <th>URL</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -210,6 +211,15 @@ export default function Dashboard() {
                     <td className="mono">{a.image}</td>
                     <td className="mono">{a.worker_id || "-"}</td>
                     <td className="mono">{a.port || "-"}</td>
+                    <td className="mono">
+                      {a.status === "running" && a.url ? (
+                        <a href={a.url} target="_blank" rel="noreferrer">
+                          {a.url}
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td>
                       <span className={`badge badge-${a.status}`}>{a.status}</span>
                     </td>

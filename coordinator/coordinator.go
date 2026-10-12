@@ -20,6 +20,8 @@ type Worker struct {
 	RAM        int    `json:"ram_mb"` // worker sends MB
 	DiskGB     int    `json:"disk_gb"`
 	ActiveApps int    `json:"active_apps"`
+	Secret     string `json:"secret,omitempty"`     // authenticates tunnel connections
+	OwnerCode  string `json:"owner_code,omitempty"` // one-time code linking node to a user
 }
 
 // Application is a developer workload scheduled onto a worker.
@@ -79,21 +81,7 @@ func handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mu.Lock()
-	_, err := db.Exec(`INSERT INTO workers (id, ip, host_ip, cpu, ram, disk_gb, active_apps, last_seen)
-		VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-		ON CONFLICT(id) DO UPDATE SET
-			ip=excluded.ip,
-			host_ip=excluded.host_ip,
-			cpu=excluded.cpu,
-			ram=excluded.ram,
-			disk_gb=excluded.disk_gb,
-			active_apps=excluded.active_apps,
-			last_seen=excluded.last_seen`,
-		worker.ID, worker.IP, worker.HostIP, worker.CPUCores, worker.RAM, worker.DiskGB, worker.ActiveApps)
-	mu.Unlock()
-
-	if err != nil {
+	if err := upsertWorker(&worker); err != nil {
 		http.Error(w, "DB error", http.StatusInternalServerError)
 		return
 	}
@@ -167,8 +155,16 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Push the spawn command directly to the selected worker.
-	hostPort, spawnErr := spawnOnWorker(workerIP, appID, req.Image, req.InternalPort)
+	// Push the spawn command to the worker: over the reverse tunnel when the
+	// node is behind NAT, otherwise by direct HTTP to its daemon.
+	spawnReq := spawnRequest{AppID: appID, Image: req.Image, InternalPort: req.InternalPort}
+	var hostPort int
+	var spawnErr error
+	if hasControl(workerID) {
+		hostPort, spawnErr = spawnViaControl(workerID, spawnReq)
+	} else {
+		hostPort, spawnErr = spawnOnWorker(workerIP, appID, req.Image, req.InternalPort)
+	}
 	if spawnErr != nil {
 		mu.Lock()
 		_, _ = db.Exec(`UPDATE apps SET status = ? WHERE id = ?`, "failed", appID)
@@ -208,7 +204,7 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		"status":        "running",
 		"charged":       deployFee,
 		"credits":       balance(userID),
-		"url":           fmt.Sprintf("http://%s.wecloud.local", appID),
+		"url":           appURL(appID),
 	})
 }
 
@@ -247,11 +243,11 @@ func handleLookup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "app id required", http.StatusBadRequest)
 		return
 	}
-	var targetHostIP, status string
+	var targetHostIP, status, workerID string
 	var port int
-	err := db.QueryRow(`SELECT workers.host_ip, apps.port, apps.status
+	err := db.QueryRow(`SELECT workers.host_ip, apps.port, apps.status, apps.worker_id
 		FROM apps JOIN workers ON apps.worker_id = workers.id
-		WHERE apps.id = ?`, appID).Scan(&targetHostIP, &port, &status)
+		WHERE apps.id = ?`, appID).Scan(&targetHostIP, &port, &status, &workerID)
 	if err != nil {
 		http.Error(w, "App mapping not found", http.StatusNotFound)
 		return
@@ -260,12 +256,18 @@ func handleLookup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("App not running (status=%s)", status), http.StatusServiceUnavailable)
 		return
 	}
-	if targetHostIP == "" {
+	tunneled := hasControl(workerID)
+	if !tunneled && targetHostIP == "" {
 		http.Error(w, "Worker did not report host_ip", http.StatusServiceUnavailable)
 		return
 	}
-	// Return a bare host:port origin the proxy can reverse-proxy to.
-	w.Write([]byte(fmt.Sprintf("%s:%d", targetHostIP, port)))
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"app_id":    appID,
+		"worker_id": workerID,
+		"host_ip":   targetHostIP,
+		"port":      port,
+		"tunneled":  tunneled,
+	})
 }
 
 // handleWorkers lists ledger state (handy for verification).
@@ -325,7 +327,7 @@ func handleApps(w http.ResponseWriter, r *http.Request) {
 		out = append(out, map[string]interface{}{
 			"id": id.String, "name": name.String, "image": image.String,
 			"worker_id": wid.String, "owner_id": owner.String,
-			"port": port, "status": status.String,
+			"port": port, "status": status.String, "url": appURL(id.String),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -336,6 +338,9 @@ func main() {
 	defer db.Close()
 
 	http.HandleFunc("/api/worker/heartbeat", handleHeartbeat)
+	http.HandleFunc("/api/worker/control", handleWorkerControl)
+	http.HandleFunc("/api/worker/reverse", handleWorkerReverse)
+	http.HandleFunc("/api/tunnel/acquire", handleTunnelAcquire)
 	http.HandleFunc("/api/developer/deploy", handleDeploy)
 	http.HandleFunc("/api/lookup/", handleLookup)
 	http.HandleFunc("/api/workers", handleWorkers)
@@ -348,6 +353,12 @@ func main() {
 	http.HandleFunc("/api/credits/balance", handleBalance)
 	http.HandleFunc("/api/credits/history", handleHistory)
 
-	log.Println("WeCloud Core Orchestrator running on port :8080...")
+	http.HandleFunc("/api/config", handleConfig)
+	http.HandleFunc("/api/nodes/claim", handleClaimCode)
+	http.HandleFunc("/api/nodes", handleMyNodes)
+
+	startRewardLoop()
+
+	log.Printf("WeCloud Core Orchestrator running on port :8080 (apps served at %s://<app-id>.%s)...", publicScheme(), baseDomain())
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

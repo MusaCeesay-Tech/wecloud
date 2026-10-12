@@ -156,6 +156,38 @@ def cmd_deploy(args):
         print("  curl -H 'Host: %s' http://localhost:8081/" % url)
 
 
+def cmd_claim(args):
+    _require_login()
+    resp = requests.post(
+        f"{COORDINATOR_URL}/api/nodes/claim", headers=auth_headers(), timeout=10
+    )
+    if resp.status_code != 200:
+        sys.exit(f"claim failed (HTTP {resp.status_code}): {resp.text}")
+    data = resp.json()
+    print(f"Claim code: {data['code']}")
+    print(f"  {data['how']}")
+
+
+def cmd_nodes(args):
+    _require_login()
+    resp = requests.get(f"{COORDINATOR_URL}/api/nodes", headers=auth_headers(), timeout=10)
+    if resp.status_code != 200:
+        sys.exit(f"nodes failed (HTTP {resp.status_code}): {resp.text}")
+    data = resp.json()
+    nodes = data.get("nodes", [])
+    print(f"Rewarded so far: {data.get('rewarded_credits')} credits")
+    if not nodes:
+        print("No nodes claimed yet. Run: wecloud claim, then start a worker with WECLOUD_OWNER_CODE=<code>")
+        return
+    for n in nodes:
+        progress = n.get("reward_progress_ms", 0) / 1000.0
+        print(
+            f"{n['id']:<16} host={n['host_ip']:<16} cpu={n['cpu_cores']} "
+            f"ram={n['ram_mb']}MB apps={n['active_apps']} "
+            f"reward_progress={progress:.0f}s last_seen={n['last_seen']}"
+        )
+
+
 def cmd_list(args):
     resp = requests.get(f"{COORDINATOR_URL}/api/apps", timeout=10)
     if resp.status_code != 200:
@@ -231,6 +263,12 @@ def main():
 
     cred = sub.add_parser("credits", help="Show your credit ledger")
     cred.set_defaults(func=cmd_credits)
+
+    clm = sub.add_parser("claim", help="Create a node-claim code to earn host rewards")
+    clm.set_defaults(func=cmd_claim)
+
+    nds = sub.add_parser("nodes", help="List worker nodes you own and rewards earned")
+    nds.set_defaults(func=cmd_nodes)
 
     for cmd, hlp in (("status", "App runtime status"), ("lookup", "Resolve an app origin")):
         st = sub.add_parser(cmd, help=hlp)

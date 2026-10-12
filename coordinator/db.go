@@ -74,14 +74,29 @@ func initDB() {
 		FOREIGN KEY(user_id) REFERENCES users(id)
 	);
 	CREATE INDEX IF NOT EXISTS idx_ledger_user ON ledger(user_id);
-	CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);`
+	CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+	CREATE TABLE IF NOT EXISTS claim_codes (
+		code       TEXT PRIMARY KEY,
+		user_id    TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		used       INTEGER NOT NULL DEFAULT 0,
+		used_at    DATETIME,
+		FOREIGN KEY(user_id) REFERENCES users(id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_claim_user ON claim_codes(user_id);`
 	if _, err = db.Exec(schema); err != nil {
 		log.Fatalf("Database setup error: %v", err)
 	}
+	// Serialize all access on a single connection: simplest correctness for
+	// SQLite, and safe because every read cursor is closed before any write.
+	db.SetMaxOpenConns(1)
 
 	// Additive migrations for databases created before these columns existed.
 	migrate("ALTER TABLE apps ADD COLUMN owner_id TEXT")
 	migrate("ALTER TABLE workers ADD COLUMN owner_id TEXT")
+	migrate("ALTER TABLE workers ADD COLUMN secret TEXT")
+	migrate("ALTER TABLE workers ADD COLUMN reward_ms INTEGER DEFAULT 0")
+	migrate("ALTER TABLE workers ADD COLUMN reward_checked_at DATETIME")
 }
 
 // migrate runs a best-effort additive change, ignoring "duplicate column" errors.

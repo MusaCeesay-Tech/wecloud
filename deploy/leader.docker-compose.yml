@@ -1,0 +1,48 @@
+version: "3.9"
+
+volumes:
+  coord_data:
+    driver: local
+
+services:
+  coordinator:
+    build: ./coordinator
+    image: wecloud/coordinator:latest
+    restart: unless-stopped
+    environment:
+      - WECLOUD_DB_PATH=/data/wecloud.db
+      - WECLOUD_BASE_DOMAIN=${WECLOUD_BASE_DOMAIN:-localhost.sslip.io}
+      - WECLOUD_PUBLIC_SCHEME=${WECLOUD_PUBLIC_SCHEME:-http}
+      - WECLOUD_PROXY_PORT=${WECLOUD_PROXY_PORT:-8081}
+      - WECLOUD_PUBLIC_URL=${WECLOUD_PUBLIC_URL:-http://localhost:3000}
+      - WECLOUD_REWARD_INTERVAL=${WECLOUD_REWARD_INTERVAL:-60}
+      - WECLOUD_REWARD_SECONDS_PER_CREDIT=${WECLOUD_REWARD_SECONDS_PER_CREDIT:-3600}
+    ports:
+      - "8080:8080"
+    volumes:
+      - coord_data:/data
+
+  proxy:
+    build: ./proxy
+    image: wecloud/proxy:latest
+    restart: unless-stopped
+    depends_on:
+      - coordinator
+    environment:
+      - WECLOUD_COORDINATOR=http://coordinator:8080
+      - WECLOUD_PROXY_ADDR=:8081
+      - WECLOUD_BASE_DOMAIN=${WECLOUD_BASE_DOMAIN:-localhost.sslip.io}
+    ports:
+      - "8081:8081"
+
+  web:
+    build: ./web
+    image: wecloud/web:latest
+    restart: unless-stopped
+    depends_on:
+      - coordinator
+    environment:
+      - NEXT_PUBLIC_COORDINATOR_URL=http://coordinator:8080
+      - WECLOUD_COORDINATOR_URL=http://coordinator:8080
+    ports:
+      - "3000:3000"
