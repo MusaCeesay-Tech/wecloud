@@ -13,7 +13,7 @@ App URLs follow `<app-id>.<base-domain>[:proxy-port]`. The proxy routes by `Host
 ### M5-B: Host Rewards + Node Claiming
 
 Workers send `secret` + optional `owner_code` in telemetry. 
-1. Login (web/CLI) → session
+1. Login or signup (web/CLI, username+email+password; magic-link fallback available) → session
 2. `POST /api/nodes/claim` (CLI `wecloud claim`) → one-time `code`
 3. Start worker with `WECLOUD_OWNER_CODE=<code>` → node linked on next heartbeat
 4. Rewards: 1 credit per `WECLOUD_REWARD_SECONDS_PER_CREDIT` seconds online for owned+recently-seen nodes (ms accumulator, SQLite-safe). Ledger reason `host_reward`. List: `GET /api/nodes` (CLI `wecloud nodes`).

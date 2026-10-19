@@ -210,15 +210,16 @@ func handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
 		return
 	}
-	var email string
-	if err := db.QueryRow(`SELECT email FROM users WHERE id = ?`, userID).Scan(&email); err != nil {
+	var email, username sql.NullString
+	if err := db.QueryRow(`SELECT email, username FROM users WHERE id = ?`, userID).Scan(&email, &username); err != nil {
 		http.Error(w, "unknown user", http.StatusUnauthorized)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"user_id": userID,
-		"email":   email,
-		"credits": balance(userID),
+		"user_id":  userID,
+		"email":    email.String,
+		"username": username.String,
+		"credits":  balance(userID),
 	})
 }
 

@@ -161,8 +161,9 @@ func creditOnlineNodes(secPerCredit int) {
 			acc -= int(threshold)
 		}
 		if credits > 0 {
-			_ = recordCredit(n.owner, credits, reasonHostReward, "")
-			log.Printf("host reward: %s earned %d credit(s) for node %s", n.owner, credits, n.id)
+			if err := recordCreditRef(n.owner, credits, reasonHostReward, "", sql.NullString{}); err == nil {
+				log.Printf("host reward: %s earned %d credit(s) for node %s", n.owner, credits, n.id)
+			}
 		}
 		_, _ = db.Exec(`UPDATE workers SET reward_ms = ?, reward_checked_at = ? WHERE id = ?`,
 			acc, now.Format(time.RFC3339), n.id)

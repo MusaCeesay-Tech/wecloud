@@ -28,7 +28,7 @@ The worker will:
 ## 2. Claim Your Node (Host Rewards)
 
 To receive uptime credits:
-1. Login to the web dashboard at the leader's `WECLOUD_PUBLIC_URL` (e.g. `http://<leader-ip>:3000`) or via CLI: `wecloud login --email you@example.com` (magic link sent).
+1. Sign up/login via web dashboard or CLI (`wecloud signup --username you --email you@example.com --password yourpass` or `wecloud login`; magic-link fallback available).
 2. Claim a code: `wecloud claim` (returns a one-time `owner_code`).
 3. Restart worker with that code set:
 

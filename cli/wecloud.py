@@ -56,7 +56,46 @@ def _require_login():
         sys.exit("Not logged in. Run: wecloud login --email you@example.com")
 
 
+def cmd_signup(args):
+    try:
+        req = requests.post(
+            f"{COORDINATOR_URL}/api/auth/signup",
+            json={
+                "username": args.username,
+                "email": args.email,
+                "password": args.password,
+                "referral": getattr(args, "referral", None) or os.environ.get("WECLOUD_REFERRAL"),
+            },
+            timeout=15,
+        )
+    except requests.RequestException as e:
+        sys.exit(f"Signup failed: {e}")
+    if req.status_code not in (200, 201):
+        sys.exit(f"Signup failed (HTTP {req.status_code}): {req.text}")
+    data = req.json()
+    save_session({"session_token": data["session_token"], "email": data["email"]})
+    print(f"Signed up as {data['email']} ({data['user_id']}, username={data.get('username')}). Credits: {data['credits']}")
+    if data.get("referral_credited"):
+        print("Referral bonus applied.")
+
+
 def cmd_login(args):
+    if getattr(args, "password", None) and getattr(args, "email", None):
+        try:
+            req = requests.post(
+                f"{COORDINATOR_URL}/api/auth/login",
+                json={"email": args.email, "password": args.password},
+                timeout=15,
+            )
+        except requests.RequestException as e:
+            sys.exit(f"Login failed: {e}")
+        if req.status_code != 200:
+            sys.exit(f"Login failed (HTTP {req.status_code}): {req.text}")
+        data = req.json()
+        save_session({"session_token": data["session_token"], "email": data["email"]})
+        print(f"Logged in as {data['email']} ({data['user_id']}). Credits: {data['credits']}")
+        return
+
     try:
         req = requests.post(
             f"{COORDINATOR_URL}/api/auth/request", json={"email": args.email}, timeout=15
@@ -248,8 +287,16 @@ def main():
     wrk = sub.add_parser("workers", help="List connected worker nodes")
     wrk.set_defaults(func=cmd_workers)
 
-    login = sub.add_parser("login", help="Log in via a magic link")
+    signup = sub.add_parser("signup", help="Create account (username+email+password)")
+    signup.add_argument("--username", required=True, help="Username")
+    signup.add_argument("--email", required=True, help="Email address")
+    signup.add_argument("--password", required=True, help="Password")
+    signup.add_argument("--referral", required=False, help="Referral code (optional)")
+    signup.set_defaults(func=cmd_signup)
+
+    login = sub.add_parser("login", help="Log in (password or magic-link fallback)")
     login.add_argument("--email", required=True, help="Your email address")
+    login.add_argument("--password", required=False, help="Password (if provided, password login; else magic link)")
     login.set_defaults(func=cmd_login)
 
     logout = sub.add_parser("logout", help="Log out and clear the local session")

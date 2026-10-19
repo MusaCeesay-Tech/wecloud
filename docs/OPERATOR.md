@@ -59,7 +59,7 @@ Deployed apps are served as `<app-id>.<base-domain>[:proxy-port]`. For example `
 ## 5. Host Rewards (Claim Codes)
 
 Workers periodically send telemetry (`secret`, optional `owner_code`). To credit uptime to a user:
-1. Login via web dashboard or CLI (`wecloud login --email ...`) to receive a session.
+1. Sign up/login via web dashboard or CLI (username+email+password; magic-link fallback).
 2. Generate a one-time **node claim code**: `POST /api/nodes/claim` (CLI: `wecloud claim`).
 3. Start worker with `WECLOUD_OWNER_CODE=<code>` (or set once). On next heartbeat/control handshake the node is linked to that user.
 4. Rewards accrue while the owned node is online and recently seen: 1 whole credit per `WECLOUD_REWARD_SECONDS_PER_CREDIT` seconds (ms accumulator). Credits are recorded with reason `host_reward`.
@@ -80,7 +80,7 @@ python worker/worker.py
 (Windows `set` with quoted forms recommended: `set "VAR=value"`)
 
 ### Claim your node (optional rewards)
-1. `wecloud login --email you@example.com` (uses leader's web origin for magic links)
+1. `wecloud signup --username you --email you@example.com --password yourpass` or `wecloud login ...` (magic-link fallback available)
 2. `wecloud claim` → copy code
 3. Restart worker with `WECLOUD_OWNER_CODE=<code>`
 

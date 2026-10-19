@@ -47,7 +47,11 @@ func initDB() {
 	);
 	CREATE TABLE IF NOT EXISTS users (
 		id          TEXT PRIMARY KEY,
+		username    TEXT UNIQUE,
 		email       TEXT UNIQUE NOT NULL,
+		password_hash TEXT,
+		referrer_id TEXT,
+		referral_code TEXT UNIQUE,
 		created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS magic_links (
@@ -70,6 +74,7 @@ func initDB() {
 		delta       INTEGER NOT NULL,
 		reason      TEXT NOT NULL,
 		app_id      TEXT,
+		referral_user_id TEXT,
 		created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY(user_id) REFERENCES users(id)
 	);
@@ -93,10 +98,11 @@ func initDB() {
 
 	// Additive migrations for databases created before these columns existed.
 	migrate("ALTER TABLE apps ADD COLUMN owner_id TEXT")
-	migrate("ALTER TABLE workers ADD COLUMN owner_id TEXT")
-	migrate("ALTER TABLE workers ADD COLUMN secret TEXT")
-	migrate("ALTER TABLE workers ADD COLUMN reward_ms INTEGER DEFAULT 0")
-	migrate("ALTER TABLE workers ADD COLUMN reward_checked_at DATETIME")
+	migrate("ALTER TABLE users ADD COLUMN username TEXT")
+	migrate("ALTER TABLE users ADD COLUMN password_hash TEXT")
+	migrate("ALTER TABLE users ADD COLUMN referrer_id TEXT")
+	migrate("ALTER TABLE users ADD COLUMN referral_code TEXT UNIQUE")
+	migrate("ALTER TABLE ledger ADD COLUMN referral_user_id TEXT")
 }
 
 // migrate runs a best-effort additive change, ignoring "duplicate column" errors.

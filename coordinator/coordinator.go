@@ -184,7 +184,7 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		hostPort, "running", appID)
 	if err == nil {
 		_, _ = db.Exec(`UPDATE workers SET active_apps = active_apps + 1 WHERE id = ?`, workerID)
-		_ = recordCredit(userID, -deployFee, reasonDeployFee, appID)
+		_ = recordCreditRef(userID, -deployFee, reasonDeployFee, appID, sql.NullString{})
 	}
 	mu.Unlock()
 	if err != nil {

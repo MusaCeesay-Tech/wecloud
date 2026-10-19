@@ -1,7 +1,8 @@
 # WeCloud
 
-Open-source, peer-to-peer decentralized cloud computing — a "Give-and-Take" host daemon
-that earns network credits for hosting other developers' web apps for free.
+Open-source "give-and-take" cloud: run a volunteer node, earn credits for hosting apps,
+spend credits to deploy your own. Works behind NAT/CGNAT (HTTP reverse tunnel), with
+hard container sandboxing, sslip.io routing, and a lightweight leader+volunteer mesh.
 
 ## Components
 
@@ -29,12 +30,16 @@ dropped capabilities and missing host mounts instead.
 
 ## Quickstart
 
+**Note:** M5 = Milestone 5 (public beta features: sslip.io routing, host rewards/claim codes,
+HTTP reverse tunnel, leader Docker Compose + scripts, operator/volunteer docs). See
+[VERIFY.md](VERIFY.md) for M5 details.
+
 ```powershell
-# 1. coordinator   (port 8080) — WECLOUD_PUBLIC_URL points magic links at the web app
+# 1. coordinator   (port 8080)
 cd coordinator; go mod tidy; go build -o wecloud-coordinator.exe .
 $env:WECLOUD_PUBLIC_URL="http://localhost:3000"; .\wecloud-coordinator.exe
 
-# 2. worker        (port 5001) — pip install -r worker/requirements.txt
+# 2. worker        (port 5001)
 python worker\worker.py
 
 # 3. mesh proxy    (port 8081)
@@ -43,8 +48,10 @@ cd proxy; go mod tidy; go build -o wecloud-proxy.exe .; .\wecloud-proxy.exe
 # 4. web dashboard (port 3000)
 cd web; npm install; npm run dev
 
-# 5. log in (magic link) and deploy — via the dashboard or the CLI
-python cli\wecloud.py login --email you@example.com
+# 5. sign up/login and deploy — via dashboard or CLI
+python cli\wecloud.py signup --username you --email you@example.com --password yourpass
+# or: python cli\wecloud.py login --email you@example.com --password yourpass
+# magic-link fallback: omit --password
 python cli\wecloud.py deploy --name hello --image nginx:alpine
 ```
 
@@ -54,13 +61,12 @@ to override), so auth cookies work same-origin with no CORS setup.
 
 See `VERIFY.md` for full curl-based end-to-end verification.
 
-## Accounts, auth & credits (M2)
+## Accounts, auth & credits (M2–M5)
 
-Accounts are **passwordless**. `POST /api/auth/request` issues a magic link, and
-`GET /api/auth/verify` consumes it, creating the account on first login and opening
-a session (HttpOnly cookie for browsers, bearer token for the CLI). No SMTP is wired
-up yet, so the link/token is echoed in the response and logged to the coordinator.
-`WECLOUD_PUBLIC_URL` controls the base URL used to build the link.
+Accounts support **username + email + password** with **magic-link fallback** (less friction
+by default). Sessions are HttpOnly cookies (browsers) and bearer tokens (CLI). On first
+signup, accounts receive a `signup_bonus`. Deploys deduct `deploy_fee` and require a valid
+session with sufficient balance.
 
 Credits are an append-only **ledger** (`balance = SUM(delta)`):
 
@@ -68,10 +74,12 @@ Credits are an append-only **ledger** (`balance = SUM(delta)`):
 |---|---|---|
 | `signup_bonus` | `+100` | once, at account creation |
 | `deploy_fee` | `-1` | per successful deploy |
-| `host_reward` | reserved | host payouts (M5) |
+| `host_reward` | `+credits` | earned for hosting (uptime of claimed node) |
+| `referral_signup` | `+credits` | referral reward on eligible signup (configurable) |
+| `referral_activity` | `+credits` | referral reward when referred user/node meets activity threshold |
 
-Deploying requires a session and a balance of at least `1` credit; otherwise it
-returns `402 Payment Required`.
+Referrals and shareable invites are built-in to help scale the mesh (see
+[docs/OPERATOR.md](docs/OPERATOR.md) and [docs/VOLUNTEER.md](docs/VOLUNTEER.md)).
 
 ## API
 
